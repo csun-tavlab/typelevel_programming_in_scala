@@ -1,3 +1,6 @@
 # Emacs temp files
 *~
 \#*\#
+
+# Compiled Scala files
+*.class
