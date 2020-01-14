@@ -67,6 +67,7 @@ This guide is divided into lessons, with one directory per lesson.
 This is intended to be followed in the following order:
 
 1. Data Structures (`data_structures`)
+2. Implicits (`implicits`)
 
 
 I'm using Scala 2.12.6 for all code.
