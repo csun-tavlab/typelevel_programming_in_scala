@@ -132,3 +132,33 @@ res1: Zero.type = Zero
 scala> sum(MyCons(Succ(Zero), MyCons(Succ(Succ(Zero)), MyCons(Succ(Succ(Succ(Zero))), MyNil))))
 res2: Succ[Succ[Succ[Succ[Succ[Succ[Zero.type]]]]]] = Succ(Succ(Succ(Succ(Succ(Succ(Zero))))))
 ```
+
+## Lookup ##
+
+Introduces hetrogeneous _maps_.
+These are basically just heterogeneous lists, where each element is a key/value pair.
+Lookup specifically looks up a particular key in the map.
+Note that the lookup is based on the type level, which is why natural numbers are used as keys below (each has its own unique type).
+Examples follow:
+
+```
+scala> import Lookup._
+import Lookup._
+
+scala> val map = HNonEmptyMap(Zero, "alpha", HNonEmptyMap(Succ(Zero), 1, HNonEmptyMap(Succ(Succ(Zero)), true, HEmptyMap)))
+map: HNonEmptyMap[Zero.type,String,HNonEmptyMap[Succ[Zero.type],Int,HNonEmptyMap[Succ[Succ[Zero.type]],Boolean,HEmptyMap.type]]] = HNonEmptyMap(Zero,alpha,HNonEmptyMap(Succ(Zero),1,HNonEmptyMap(Succ(Succ(Zero)),true,HEmptyMap)))
+
+scala> lookup(map, Zero)
+res0: String = alpha
+
+scala> lookup(map, Succ(Zero))
+res1: Int = 1
+
+scala> lookup(map, Succ(Succ(Zero)))
+res2: Boolean = true
+
+scala> lookup(map, Succ(Succ(Succ(Zero))))
+<console>:16: error: could not find implicit value for parameter ev: Lookup.LookupAux[HNonEmptyMap[Zero.type,String,HNonEmptyMap[Succ[Zero.type],Int,HNonEmptyMap[Succ[Succ[Zero.type]],Boolean,HEmptyMap.type]]],Succ[Succ[Succ[Zero.type]]],Value]
+       lookup(map, Succ(Succ(Succ(Zero))))
+             ^
+```
