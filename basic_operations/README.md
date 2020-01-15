@@ -356,3 +356,176 @@ def lessThanValue(n1: Nat, n2: Nat): Boolean = {
 }
 ```
 
+The catch-all case will handle all possible cases.
+With pattern matching, this isn't an issue, since we'll only hit the catch-all case if we don't hit the other cases first.
+When doing type-level programming, this is an issue, because we don't have the same sort of control over the order in which `implicit`s are attempted.
+To show this, consider the following code, reusing components from before:
+
+```scala
+object LessThanValueBROKEN {
+  type LessThanValueAux[
+    N1 <: Nat,
+    N2 <: Nat,
+    Res <: MyBoolean] = LessThanValue[N1, N2] { type Result = Res }
+
+  implicit def zeroSucc[Rest <: Nat]: LessThanValueAux[Zero.type, Succ[Rest], MyTrue.type] = {
+    new LessThanValue[Zero.type, Succ[Rest]] {
+      type Result = MyTrue.type
+      def lessThan(n1: Zero.type, n2: Succ[Rest]): Result = MyTrue
+    }
+  }
+
+  implicit def succSucc[
+    RestN1 <: Nat,
+    RestN2 <: Nat,
+    RestResult <: MyBoolean](
+    implicit rec: LessThanValueAux[RestN1, RestN2, RestResult]):
+      LessThanValueAux[Succ[RestN1], Succ[RestN2], RestResult] = {
+    new LessThanValue[Succ[RestN1], Succ[RestN2]] {
+      type Result = RestResult
+      def lessThan(n1: Succ[RestN1], n2: Succ[RestN2]): Result = {
+        rec.lessThan(n1.n, n2.n)
+      }
+    }
+  }
+
+  implicit def anythingElse[
+    N1 <: Nat,
+    N2 <: Nat]: LessThanValueAux[N1, N2, MyFalse.type] = {
+    new LessThanValue[N1, N2] {
+      type Result = MyFalse.type
+      def lessThan(n1: N1, n2: N2): Result = MyFalse
+    }
+  }
+
+  def lessThan[
+    N1 <: Nat,
+    N2 <: Nat,
+    Result <: MyBoolean](n1: N1, n2: N2)(implicit ev: LessThanValueAux[N1, N2, Result]): Result = {
+    ev.lessThan(n1, n2)
+  }
+}
+```
+
+If we go to compile and run this, we'll quickly find that it doesn't work as intended:
+
+```
+scala> import LessThanValue._
+import LessThanValue._
+
+scala> lessThan(Succ(Zero), Zero)
+res0: MyFalse.type = MyFalse
+
+scala> lessThan(Succ(Zero), Succ(Succ(Zero)))
+res1: MyFalse.type = MyFalse
+```
+
+While it correctly says that `1 < 0` is false, it now says that `1 < 2` is also false.
+The issue here is that we have multiple implicits that can apply, and the compiler happens to be choosing one we don't want.
+(In some circumstances, the Scala compiler will reject this code altogether and say that it's ambiguous which implicit to use, but this isn't happening here for reasons I don't understand.)
+
+We do have some control over the order in which implicits are applied.
+Specifically, if multiple implicits are in scope, it will try those which are immediately available first, and then it will try those which are in any parent classes.
+In this manner, we can impose a total ordering on when implicits are attempted if we so choose, recovering pattern matching semantics (albeit, in an awkward way).
+This is shown in the code below, held in `less_than_value_v2.scala`:
+
+```scala
+trait LessThanValueLowPriority {
+  type LessThanValueAux[
+    N1 <: Nat,
+    N2 <: Nat,
+    Res <: MyBoolean] = LessThanValue[N1, N2] { type Result = Res }
+
+  implicit def anythingElse[
+    N1 <: Nat,
+    N2 <: Nat]: LessThanValueAux[N1, N2, MyFalse.type] = {
+    new LessThanValue[N1, N2] {
+      type Result = MyFalse.type
+      def lessThan(n1: N1, n2: N2): Result = MyFalse
+    }
+  }
+}
+
+object LessThanValue extends LessThanValueLowPriority {
+  implicit def zeroSucc[Rest <: Nat]: LessThanValueAux[Zero.type, Succ[Rest], MyTrue.type] = {
+    new LessThanValue[Zero.type, Succ[Rest]] {
+      type Result = MyTrue.type
+      def lessThan(n1: Zero.type, n2: Succ[Rest]): Result = MyTrue
+    }
+  }
+
+  implicit def succSucc[
+    RestN1 <: Nat,
+    RestN2 <: Nat,
+    RestResult <: MyBoolean](
+    implicit rec: LessThanValueAux[RestN1, RestN2, RestResult]):
+      LessThanValueAux[Succ[RestN1], Succ[RestN2], RestResult] = {
+    new LessThanValue[Succ[RestN1], Succ[RestN2]] {
+      type Result = RestResult
+      def lessThan(n1: Succ[RestN1], n2: Succ[RestN2]): Result = {
+        rec.lessThan(n1.n, n2.n)
+      }
+    }
+  }
+
+  def lessThan[
+    N1 <: Nat,
+    N2 <: Nat,
+    Result <: MyBoolean](n1: N1, n2: N2)(implicit ev: LessThanValueAux[N1, N2, Result]): Result = {
+    ev.lessThan(n1, n2)
+  }
+}
+```
+
+Since we want to try the catch-all case (`anythingElse`) last, we intentionally put this in a parent class of `LessThanValue`.
+(It's idiomatic to mark such classes as being `LowPriority` as has been done here, though this isn't necessary.)
+We then put the more specific cases to try directly in `LessThanValue`.
+Compiling and running this works:
+
+```
+scala> import LessThanValue._
+import LessThanValue._
+
+scala> lessThan(Succ(Zero), Zero)
+res0: MyFalse.type = MyFalse
+
+scala> lessThan(Succ(Zero), Succ(Succ(Zero)))
+res1: MyTrue.type = MyTrue
+```
+
+### Addition ###
+
+In Peano arithmetic, addition can be implemented as follows:
+
+- `0 + n = n`
+- `succ(n) + m = succ(n + m)`
+
+A more traditional value-based representation follows:
+
+```scala
+def add(n1: Nat, n2: Nat): Nat = {
+  n1 match {
+    case Zero => n2
+    case Succ(n) => Succ(add(n, n2))
+  }
+}
+```
+  
+Code implementing this is in `addition.scala`.
+This does not introduce anything new, but serves as another example.
+Some examples follow:
+
+```
+scala> import Add._
+import Add._
+
+scala> add(Succ(Zero), Zero)
+res1: Succ[Zero.type] = Succ(Zero)
+
+scala> add(Succ(Zero), Succ(Zero))
+res2: Succ[Succ[Zero.type]] = Succ(Succ(Zero))
+
+scala> add(Succ(Succ(Succ(Zero))), Succ(Succ(Zero)))
+res3: Succ[Succ[Succ[Succ[Succ[Zero.type]]]]] = Succ(Succ(Succ(Succ(Succ(Zero)))))
+```
+
