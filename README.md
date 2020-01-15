@@ -69,5 +69,6 @@ This is intended to be followed in the following order:
 1. Data Structures (`data_structures`)
 2. Implicits (`implicits`)
 3. Basic Operations (`basic_operations`)
+4. Advanced Operations (`advanced_operations`)
 
 I'm using Scala 2.12.6 for all code.
