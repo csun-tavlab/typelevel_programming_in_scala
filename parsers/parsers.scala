@@ -1,12 +1,30 @@
+sealed trait Nat {
+  def asInteger: Int
+}
+case object Zero extends Nat {
+  def asInteger: Int = 0
+}
+case class Succ[N <: Nat](n: N) extends Nat {
+  def asInteger: Int = n.asInteger + 1
+}
+
 sealed trait HList
 case object HNil extends HList
 case class HCons[Head, Tail <: HList](head: Head, tail: Tail) extends HList
 
-// And[Elem[A.type], Elem[B.type]]
+trait Func[A, B] {
+  def apply(a: A): B
+}
+
 sealed trait PreParser
 case class Elem[A](a: A) extends PreParser
 case class And[P1 <: PreParser, P2 <: PreParser](p1: P1, p2: P2) extends PreParser
 case class Or[P1 <: PreParser, P2 <: PreParser](p1: P1, p2: P2) extends PreParser
+case class MapP[PP <: PreParser, B](p: PP) extends PreParser
+
+trait MakeMap[B] {
+  def apply[PP <: PreParser](p: PP): MapP[PP, B]
+}
 
 trait Parser[PP <: PreParser, InputTokens <: HList] {
   type OutputTokens <: HList
@@ -24,6 +42,12 @@ object Parser {
       type OutputTokens = Out
       type Parsed = P
     }
+
+  def map[B]: MakeMap[B] = {
+    new MakeMap[B] {
+      def apply[PP <: PreParser](p: PP): MapP[PP, B] = MapP(p)
+    }
+  }
 
   implicit def elem[
     A,
@@ -89,7 +113,24 @@ object Parser {
       }
     }
   }
-  
+
+  implicit def mapP[
+    PP <: PreParser,
+    A,
+    B,
+    InputList <: HList,
+    OutputList <: HList
+  ](implicit ev: ParserAux[PP, InputList, OutputList, A], f: Func[A, B]): ParserAux[MapP[PP, B], InputList, OutputList, B] = {
+    new Parser[MapP[PP, B], InputList] {
+      type OutputTokens = OutputList
+      type Parsed = B
+      def parse(input: InputList): (OutputList, B) = {
+        val (output, a) = ev.parse(input)
+        (output, f.apply(a))
+      }
+    }
+  }
+
   def parse[
     PP <: PreParser,
     InputTokens <: HList,
@@ -102,6 +143,7 @@ object Parser {
 object A {}
 object B {}
 object C {}
+case class Variable[Id <: Nat](id: Id)
 
 object Test {
   import Parser._
@@ -110,5 +152,13 @@ object Test {
     println(parse(And(Elem(A), Elem(B)), HCons(A, HCons(B, HNil))))
     println(parse(Or(Elem(A), Elem(B)), HCons(A, HNil)))
     println(parse(Or(Elem(A), Elem(B)), HCons(B, HNil)))
+    implicit def varToInt[N <: Nat]: Func[Variable[N], Int] = {
+      new Func[Variable[N], Int] {
+        def apply(x: Variable[N]): Int = x.id.asInteger
+      }
+    }
+
+    val x = Variable(Succ(Succ(Zero)))
+    println(parse(map[Int](Elem(x)), HCons(x, HNil)))
   }
 }
