@@ -58,6 +58,38 @@ object Parser {
     }
   }
 
+  implicit def orLeft[
+    P1 <: PreParser,
+    P2 <: PreParser,
+    InputList <: HList,
+    OutputList <: HList,
+    A
+  ](implicit ev: ParserAux[P1, InputList, OutputList, A]): ParserAux[Or[P1, P2], InputList, OutputList, A] = {
+    new Parser[Or[P1, P2], InputList] {
+      type OutputTokens = OutputList
+      type Parsed = A
+      def parse(input: InputList): (OutputList, A) = {
+        ev.parse(input)
+      }
+    }
+  }
+
+  implicit def orRight[
+    P1 <: PreParser,
+    P2 <: PreParser,
+    InputList <: HList,
+    OutputList <: HList,
+    A
+  ](implicit ev: ParserAux[P2, InputList, OutputList, A]): ParserAux[Or[P1, P2], InputList, OutputList, A] = {
+    new Parser[Or[P1, P2], InputList] {
+      type OutputTokens = OutputList
+      type Parsed = A
+      def parse(input: InputList): (OutputList, A) = {
+        ev.parse(input)
+      }
+    }
+  }
+  
   def parse[
     PP <: PreParser,
     InputTokens <: HList,
@@ -76,6 +108,7 @@ object Test {
   def main(args: Array[String]) {
     println(parse(Elem(A), HCons(A, HNil)))
     println(parse(And(Elem(A), Elem(B)), HCons(A, HCons(B, HNil))))
-    
+    println(parse(Or(Elem(A), Elem(B)), HCons(A, HNil)))
+    println(parse(Or(Elem(A), Elem(B)), HCons(B, HNil)))
   }
 }
