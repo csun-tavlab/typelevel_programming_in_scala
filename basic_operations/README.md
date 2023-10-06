@@ -258,7 +258,7 @@ This behaves similarly to the code before, but now:
 
 The rest of the non-recursive cases should be straightforward:
 
-```
+```scala
 object LessThanValue {
   // same code as before
   implicit def succZero[Rest <: Nat]: LessThanValueAux[Succ[Rest], Zero.type, MyFalse.type] = {
